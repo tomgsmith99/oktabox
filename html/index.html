@@ -1,0 +1,271 @@
+<html>
+
+<head>
+
+<!-- ********** STYLESHEETS **************** -->
+
+<!-- OKTA STYLESHEETS FOR AUTHN WIDGET -->
+<link
+  href="https://ok1static.oktacdn.com/assets/js/sdk/okta-signin-widget/1.11.0/css/okta-sign-in.min.css"
+  type="text/css"
+  rel="stylesheet"/>
+ 
+<link
+  href="https://ok1static.oktacdn.com/assets/js/sdk/okta-signin-widget/1.11.0/css/okta-theme.css"
+  type="text/css"
+  rel="stylesheet"/>
+
+<!-- UI tweaks for Okta Authn widget -->
+<style>
+	#okta-sign-in { margin-top: 0px; }
+	.okta-form-input-error.o-form-input-error.o-form-explain { display: none }
+</style>
+
+<!-- BOOTSTRAP CSS -->
+<link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+<style>
+
+#app-container, #signoutDiv, #loadingDiv
+{
+	display: none;
+}
+
+</style>
+
+<link rel="stylesheet" href="https://cdn01.boxcdn.net/platform/elements/1.1.0/en-US/explorer.css" />
+
+<!-- ********** JAVASCRIPT ***************** -->
+
+<!-- JQUERY -->
+<script
+  src="https://code.jquery.com/jquery-3.2.1.min.js"
+  integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+  crossorigin="anonymous"></script>
+
+<!-- BOOTSTRAP JS-->
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+
+<!-- OKTA AUTHN WIDGET -->
+<script
+  src="https://ok1static.oktacdn.com/assets/js/sdk/okta-signin-widget/1.11.0/js/okta-sign-in.min.js"
+  type="text/javascript"></script>
+
+<script>
+	$(".okta-form-input-error").remove();
+</script>
+
+<script src="https://cdn.polyfill.io/v2/polyfill.min.js?features=es6,Intl"></script>
+
+<!-- Box Content Explorer -->
+<script src="https://cdn01.boxcdn.net/platform/elements/1.1.0/en-US/explorer.js"></script>
+
+<script>
+
+	function showBoxUI(boxAccessToken) {
+		console.log("the box access token is: " + boxAccessToken);
+
+		var folderId = '0';
+
+		var contentExplorer = new Box.ContentExplorer();
+		contentExplorer.show(folderId, boxAccessToken, {
+			container: '#app-container',
+			logoUrl: 'https://www.okta.com/sites/all/themes/Okta/images/blog/Logos/Okta_Logo_BrightBlue_Medium.png'
+		});
+
+		$("#app-container").show();
+	}
+
+</script>
+
+
+<!-- OKTA AUTHN WIDGET INIT -->
+
+<script>
+	window.onload = function() {
+
+		oktaWidget();
+	}
+
+	function oktaWidget() {
+
+		var signIn = new OktaSignIn({
+			baseUrl: '{{baseUrl}}',
+			logo: '{{logo}}',
+			clientId: '{{clientId}}',
+			redirectUri: '{{redirectUri}}',
+
+			authParams: {
+				scopes: [
+					'openid',
+					'profile'
+				]
+			}
+		});
+
+		signIn.session.get(function (res) {
+			if (res.status === 'ACTIVE') {
+				console.log("the user has an active session.");
+				console.log("result of session check:");
+				console.dir(res);
+
+				if (!(signIn.tokenManager.get('my_id_token'))) {
+					console.log("the user has an active Okta session, but does not have an id token.");
+
+					getTokenFromURL( (err, id_token) => {
+						if (err) {
+							console.log("could not find id_token in url.");
+							signIn.session.close(function (err) {
+
+								signIn.tokenManager.clear();
+
+								// to do: add error checking here 
+								// to see if the user's okta session has already expired.
+								if (err) {
+									console.log("something went wrong trying to log the user out.");
+									return;
+								}
+								location.reload(true);
+							});
+						}
+						else {
+							showApp(id_token);
+						}
+					});
+				}
+				else {
+					var tokenObj = signIn.tokenManager.get('my_id_token');
+
+					showApp(tokenObj.idToken);
+				}
+			}
+			// No session, or error retrieving the session. Render the Sign-In Widget. 
+			else if (res.status === 'INACTIVE') {
+				signIn.renderEl(
+					{el: '#osw-container'},
+
+					function success(res) {
+						if (res.status === 'SUCCESS') {
+							console.log("claims from id token:");
+							console.dir(res.claims);
+							console.log("complete response object from auth:");
+							console.dir(res);
+							signIn.tokenManager.add('my_id_token', res);
+							signIn.hide();
+							showApp(res.idToken);
+						}
+					},
+					function error(err) {}
+				);
+			}
+		});
+
+		var signout = document.getElementById("signout");
+
+		signout.addEventListener('click', function (e) {
+			e.preventDefault();
+			e.stopPropagation();
+
+			signIn.session.close(function (err) {
+
+				signIn.tokenManager.clear();
+
+				// to do: add error checking here 
+				// to see if the user's okta session has already expired.
+				if (err) {
+					console.log("something went wrong trying to log the user out.");
+					console.log("the user's session may have already expired.");
+				}
+				location.hash = ""; // remove id token
+				location.reload(true);
+			});
+		});
+	}
+
+	function getTokenFromURL(callback) {
+		var parser = document.createElement('a');
+		parser.href = window.location.href;
+
+		var arr = parser.hash.split("&");
+
+		var kvp = arr[0].split("=");
+
+		if (kvp[0] == "#id_token") {
+			return callback(null, kvp[1]);
+		}
+		return callback("error");
+	}
+
+	function showApp(idToken) {
+
+		$("#loadingDiv").show();
+
+		$("#signoutDiv").show();
+
+		$("#authInstrux").hide();
+
+		console.log("the id token is: " + idToken);
+
+		$.post( "/boxUI", { idToken: idToken })
+			.done(function( boxAccessToken ) {
+
+				console.log("the box access token is: " + boxAccessToken);
+
+				$("#loadingDiv").hide();
+
+				showBoxUI(boxAccessToken);
+			});
+	}
+
+</script>
+
+</head>
+
+<body>
+
+	<div class="container">
+		<div class="header clearfix">
+			<nav>
+				<ul class="nav nav-pills pull-right">
+					<li role="presentation" class="active"><a href="/">Home</a></li>
+					<li role="presentation"><a href="register">Register</a></li>
+				</ul>
+			</nav>
+			
+			<h3 class="text-muted">Box Platform + Okta</h3>
+		</div>
+
+		<div class="jumbotron">
+			<div class="row" style="vertical-align: top">
+				<div class="col-md-6">
+					<p class="lead">Use Okta as your identity layer for Box Platform.</p>
+
+					<div id = "authInstrux">
+
+						<p>Sign in if you already have an account, or register to sign up for a new account.</p>
+
+						<p><a class="btn btn-success" href="register" role="button">Register</a></p>
+
+					</div>
+
+					<div id = "signoutDiv"><p style = "text-align: center"><a class="btn btn-success" href="#" id = "signout" role="button">sign out</a></p></div>
+
+				</div>
+
+				<div class="col-md-6">
+
+					<div id = "osw-container"></div>
+
+					<div id = "loadingDiv"><p id = "welcome">loading your Box files...</p></div>
+
+					<div id = "app-container"></div>
+
+				</div>
+
+		</div>
+
+	</div>
+
+</body>
+
+</html>

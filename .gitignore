@@ -1,0 +1,5 @@
+node_modules/
+.env
+.envBox
+!.env_example
+temp.js

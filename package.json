@@ -1,0 +1,21 @@
+{
+  "name": "OktaAndBoxPlatform",
+  "version": "1.0.0",
+  "description": "Using Okta as identity layer for Box Platform. Okta provides provisioning and authentication.",
+  "main": "app.js",
+	"scripts": {
+	"start": "node app.js"
+	},
+  "author": "tom.smith@okta.com",
+  "dependencies": {
+    "body-parser": "^1.18.2",
+    "box-node-sdk": "^1.9.0",
+    "express": "^4.16.1",
+    "fs": "0.0.1-security",
+    "http": "0.0.0",
+    "util": "^0.10.3"
+  },
+  "engines": {
+    "node": "v6.11.3"
+  }
+}

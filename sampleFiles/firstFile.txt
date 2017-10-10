@@ -1,0 +1,3 @@
+Welcome to Box Platform!
+
+Identity by Okta!
